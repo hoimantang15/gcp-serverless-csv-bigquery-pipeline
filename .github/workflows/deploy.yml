@@ -1,0 +1,34 @@
+name: Deploy CSV Pipeline Function
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_EMAIL }}
+
+      - name: Deploy Cloud Run function
+        uses: google-github-actions/deploy-cloud-function@v2
+        with:
+          name: process-csv-file
+          runtime: python312
+          region: us-central1
+          entry_point: process_csv
+          service_account: ${{ vars.GCP_SA_EMAIL }}
+          environment_variables: QUARANTINE_BUCKET=${{ vars.QUARANTINE_BUCKET }}
+          trigger_event_filters: type=google.cloud.storage.object.v1.finalized,bucket=${{ vars.RAW_BUCKET }}
