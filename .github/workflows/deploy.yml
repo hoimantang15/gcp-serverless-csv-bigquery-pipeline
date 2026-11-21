@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,20 +18,25 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SA_EMAIL }}
 
-      - name: Deploy Cloud Run function
-        uses: google-github-actions/deploy-cloud-functions@v2
-        with:
-          name: process-csv-file
-          runtime: python312
-          region: us-central1
-          entry_point: process_csv
-          service_account_email: ${{ vars.GCP_SA_EMAIL }}
-          env_vars: QUARANTINE_BUCKET=${{ vars.QUARANTINE_BUCKET }}
-          event_trigger_type: google.cloud.storage.object.v1.finalized
-          event_trigger_resource: projects/ace-csv-pipeline-project01/buckets/${{ vars.RAW_BUCKET }}
-          event_trigger_service: storage.googleapis.com
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy 2nd Gen Cloud Run function
+        run: |
+          gcloud functions deploy process-csv-file \
+            --gen2 \
+            --region=us-central1 \
+            --runtime=python312 \
+            --source=. \
+            --entry-point=process_csv \
+            --service-account=${{ vars.GCP_SA_EMAIL }} \
+            --set-env-vars=QUARANTINE_BUCKET=${{ vars.QUARANTINE_BUCKET }} \
+            --trigger-event-filters=type=google.cloud.storage.object.v1.finalized \
+            --trigger-event-filters=bucket=${{ vars.RAW_BUCKET }} \
+            --project=ace-csv-pipeline-project01
